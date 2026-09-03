@@ -1,0 +1,128 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>AI-Assisted Continuity Summary</h1>
+        <p class="page-subtitle">Safe, consent-aware handover generated for Session <code>{{ summary.session_id }}</code></p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('edit_consent', session_id=summary.session_id) }}" class="btn btn-outline">✏️ Edit / Revoke Consent</a>
+        <a href="{{ url_for('baseline', session_id=summary.session_id) }}" class="btn btn-secondary">⚖️ Compare with Baseline</a>
+    </div>
+</div>
+
+{% if summary.human_review_required %}
+<div class="alert-banner warning-banner">
+    <div class="alert-banner-header">
+        <span class="banner-icon">⚠️</span>
+        <div>
+            <strong>Human Review Recommended (Low-Confidence Prediction)</strong>
+            <p>One or more AI model confidence scores are below the 70% threshold. Professional human review is required before taking clinical action.</p>
+            <ul>
+                {% for reason in summary.human_review_reasons %}
+                <li>{{ reason }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="handover-grid">
+    <!-- Main Structured Summary Card -->
+    <div class="card summary-card">
+        <div class="summary-header-bar">
+            <div>
+                <h2>CONTINUITY SUMMARY</h2>
+                <span class="client-id-pill">Client ID: {{ summary.client_id }}</span>
+            </div>
+            <span class="privacy-badge {% if summary.privacy_status == 'Protected' %}protected{% else %}full-access{% endif %}">
+                🛡️ {{ summary.privacy_status }}
+            </span>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Previous Session Notes:</span>
+            <div class="summary-content-box {% if 'Restricted' in summary.summary_text %}restricted{% endif %}">
+                {{ summary.summary_text }}
+            </div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Client Goal:</span>
+            <div class="summary-content-box {% if 'Restricted' in summary.client_goal %}restricted{% endif %}">
+                {{ summary.client_goal }}
+            </div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Pending Action:</span>
+            <div class="summary-content-box {% if 'Restricted' in summary.pending_action %}restricted{% endif %}">
+                {{ summary.pending_action }}
+            </div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Sensitive Information (Disclosures):</span>
+            <div class="summary-content-box sensitive-box {% if 'Restricted' in summary.sensitive_text %}restricted{% endif %}">
+                {{ summary.sensitive_text }}
+            </div>
+        </div>
+    </div>
+
+    <!-- AI & Governance Details Panel -->
+    <div class="card meta-panel">
+        <h3>🤖 Model &amp; Privacy Analytics</h3>
+        
+        <div class="meta-item">
+            <span class="meta-title">Viewing Role:</span>
+            <span class="role-pill {{ user_role | lower | replace(' ', '-') }}">{{ user_role }}</span>
+        </div>
+
+        <hr>
+
+        <div class="meta-item">
+            <span class="meta-title">ML Relevance Prediction:</span>
+            <div class="model-stat">
+                <strong class="stat-label">{{ summary.ml_relevance }}</strong>
+                <span class="stat-conf">Confidence: {{ summary.ml_confidence }}%</span>
+            </div>
+        </div>
+
+        <div class="meta-item">
+            <span class="meta-title">DL Sensitivity Detector:</span>
+            <div class="model-stat">
+                <strong class="stat-label">{{ summary.dl_sensitivity }}</strong>
+                <span class="stat-conf">Confidence: {{ summary.dl_confidence }}%</span>
+            </div>
+        </div>
+
+        <hr>
+
+        <h4>📋 Client Consent Status</h4>
+        <ul class="consent-checklist">
+            <li>
+                <span>Session Summary:</span>
+                {% if summary.consent_status.summary %}<span class="check-yes">✓ Consented</span>{% else %}<span class="check-no">✗ Denied</span>{% endif %}
+            </li>
+            <li>
+                <span>Client Goal:</span>
+                {% if summary.consent_status.goal %}<span class="check-yes">✓ Consented</span>{% else %}<span class="check-no">✗ Denied</span>{% endif %}
+            </li>
+            <li>
+                <span>Pending Action:</span>
+                {% if summary.consent_status.pending_action %}<span class="check-yes">✓ Consented</span>{% else %}<span class="check-no">✗ Denied</span>{% endif %}
+            </li>
+            <li>
+                <span>Sensitive Notes:</span>
+                {% if summary.consent_status.sensitive %}<span class="check-yes">✓ Consented</span>{% else %}<span class="check-no">✗ Denied</span>{% endif %}
+            </li>
+        </ul>
+
+        <div class="governance-note">
+            <p><strong>Governance Principle:</strong> Client consent and RBAC rules strictly override AI model outputs in all scenarios.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

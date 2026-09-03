@@ -1,0 +1,61 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Interactive Consent Management</h1>
+        <p class="page-subtitle">Update or revoke client privacy consent for Session <code>{{ session.session_id }}</code></p>
+    </div>
+</div>
+
+<div class="card form-card">
+    <div class="session-summary-box">
+        <h4>Session Overview (Client: <span class="highlight">{{ session.client_id }}</span>)</h4>
+        <p><strong>Session Text:</strong> {{ session.session_text }}</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('edit_consent', session_id=session.session_id) }}">
+        <h3>🔒 Modify Consent Preferences</h3>
+        <p class="warning-note">⚠️ Note: Changing consent here immediately updates the consent status. The very next handover generated or viewed will reflect these privacy changes.</p>
+
+        <div class="consent-grid">
+            <div class="consent-box">
+                <label for="consent_summary">Summary Consent</label>
+                <select name="consent_summary" id="consent_summary">
+                    <option value="Yes" {% if session.consent_summary == 'Yes' %}selected{% endif %}>Yes (Permit Sharing)</option>
+                    <option value="No" {% if session.consent_summary == 'No' %}selected{% endif %}>No (Restrict)</option>
+                </select>
+            </div>
+
+            <div class="consent-box">
+                <label for="consent_goal">Client Goal Consent</label>
+                <select name="consent_goal" id="consent_goal">
+                    <option value="Yes" {% if session.consent_goal == 'Yes' %}selected{% endif %}>Yes (Permit Sharing)</option>
+                    <option value="No" {% if session.consent_goal == 'No' %}selected{% endif %}>No (Restrict)</option>
+                </select>
+            </div>
+
+            <div class="consent-box">
+                <label for="consent_pending_action">Pending Action Consent</label>
+                <select name="consent_pending_action" id="consent_pending_action">
+                    <option value="Yes" {% if session.consent_pending_action == 'Yes' %}selected{% endif %}>Yes (Permit Sharing)</option>
+                    <option value="No" {% if session.consent_pending_action == 'No' %}selected{% endif %}>No (Restrict)</option>
+                </select>
+            </div>
+
+            <div class="consent-box highlight-consent">
+                <label for="consent_sensitive">Sensitive Info Consent</label>
+                <select name="consent_sensitive" id="consent_sensitive">
+                    <option value="Yes" {% if session.consent_sensitive == 'Yes' %}selected{% endif %}>Yes (Explicit Consent Granted)</option>
+                    <option value="No" {% if session.consent_sensitive == 'No' %}selected{% endif %}>No (Restrict / Revoke Consent)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">Save Consent Changes &amp; View Handover</button>
+            <a href="{{ url_for('handover', session_id=session.session_id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

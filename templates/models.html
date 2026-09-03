@@ -1,0 +1,73 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Machine Learning &amp; Deep Learning Model Architecture</h1>
+        <p class="page-subtitle">Technical explanation of model architectures, feature extraction, and decision support scope.</p>
+    </div>
+</div>
+
+<div class="models-overview-grid">
+    <!-- ML Model Explanation -->
+    <div class="card model-info-card">
+        <div class="model-badge ml">Machine Learning</div>
+        <h2>1. Relevance Classifier</h2>
+        <p class="model-tech"><strong>Architecture:</strong> TF-IDF Vectorizer + Logistic Regression</p>
+        
+        <div class="model-details">
+            <h4>Purpose:</h4>
+            <p>Classify whether a piece of session information is relevant for client handover between helpline workers.</p>
+
+            <h4>Why this model?</h4>
+            <ul>
+                <li><strong>Explainability:</strong> Linear model coefficients clearly reveal which n-grams contribute to relevance predictions.</li>
+                <li><strong>Confidence Scores:</strong> Logistic regression outputs calibrated probabilities (<code>predict_proba</code>).</li>
+                <li><strong>Efficiency:</strong> Fast to train and execute on synthetic/de-identified session records.</li>
+            </ul>
+
+            <h4>Example Input/Output:</h4>
+            <div class="code-box">
+                <strong>Input:</strong> "Client wants to improve study routine and requested a follow-up."<br>
+                <strong>Output:</strong> Relevant (Confidence: 92%)
+            </div>
+        </div>
+    </div>
+
+    <!-- DL Model Explanation -->
+    <div class="card model-info-card">
+        <div class="model-badge dl">Deep Learning</div>
+        <h2>2. Sensitivity Detector</h2>
+        <p class="model-tech"><strong>Architecture:</strong> TextVectorization &rarr; Embedding &rarr; LSTM &rarr; Dense &rarr; Sigmoid</p>
+
+        <div class="model-details">
+            <h4>Purpose:</h4>
+            <p>Detect whether session text contains potentially sensitive disclosures requiring privacy masking.</p>
+
+            <h4>Why LSTM?</h4>
+            <ul>
+                <li><strong>Sequential Context:</strong> Captures contextual word dependencies in text sequences.</li>
+                <li><strong>End-to-End Serialization:</strong> Embedded <code>TextVectorization</code> layer ensures seamless model loading.</li>
+            </ul>
+
+            <h4>Example Input/Output:</h4>
+            <div class="code-box">
+                <strong>Input:</strong> "Client disclosed private personal health history and family trauma."<br>
+                <strong>Output:</strong> Sensitive (Confidence: 94%)
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scope & Safeguards Disclaimer -->
+<div class="card margin-top danger-banner">
+    <h3>⚠️ Prototype Scope &amp; Safety Disclaimer</h3>
+    <p><strong>This system is a prototype decision-support tool, NOT a clinical, medical, or psychological diagnostic system.</strong></p>
+    <ul>
+        <li>The Deep Learning model only classifies text as potentially sensitive or non-sensitive based on keyword pattern sequences.</li>
+        <li>The model does NOT understand human emotions, diagnose mental health conditions, or make clinical decisions.</li>
+        <li>Human counsellors and social workers remain fully responsible for final handover decisions.</li>
+        <li>Client consent choices unconditionally override all ML/DL model predictions in every instance.</li>
+    </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,160 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Model Evaluation &amp; Before/After System Experiment</h1>
+        <p class="page-subtitle">Actual evaluation metrics calculated from test split and empirical dataset evaluation.</p>
+    </div>
+</div>
+
+<!-- ML & DL Model Performance Cards -->
+<div class="eval-grid">
+    <!-- ML Relevance Model -->
+    <div class="card eval-card">
+        <h3>🤖 ML Relevance Classifier (TF-IDF + Logistic Regression)</h3>
+        <p class="eval-subtitle">Classifies session text relevance for handover summary (Test split: {{ metrics.ml_relevance.test_samples }} samples)</p>
+        
+        <div class="metrics-row">
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.ml_relevance.accuracy * 100) | round(1) }}%</span>
+                <span class="stat-lbl">Accuracy</span>
+            </div>
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.ml_relevance.precision * 100) | round(1) }}%</span>
+                <span class="stat-lbl">Precision</span>
+            </div>
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.ml_relevance.recall * 100) | round(1) }}%</span>
+                <span class="stat-lbl">Recall</span>
+            </div>
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.ml_relevance.f1_score * 100) | round(1) }}%</span>
+                <span class="stat-lbl">F1-Score</span>
+            </div>
+        </div>
+
+        <div class="cm-box">
+            <h4>Confusion Matrix (ML Test Split):</h4>
+            <table class="cm-table">
+                <tr><th></th><th>Pred Non-Relevant</th><th>Pred Relevant</th></tr>
+                <tr><th>Actual Non-Relevant</th><td>{{ metrics.ml_relevance.confusion_matrix[0][0] }}</td><td>{{ metrics.ml_relevance.confusion_matrix[0][1] }}</td></tr>
+                <tr><th>Actual Relevant</th><td>{{ metrics.ml_relevance.confusion_matrix[1][0] }}</td><td>{{ metrics.ml_relevance.confusion_matrix[1][1] }}</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- DL Sensitivity Model -->
+    <div class="card eval-card">
+        <h3>🧠 DL Sensitive-Content Detector (Embedding + LSTM)</h3>
+        <p class="eval-subtitle">Detects potentially sensitive personal disclosures (Test split: {{ metrics.dl_sensitivity.test_samples }} samples)</p>
+        
+        <div class="metrics-row">
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.dl_sensitivity.accuracy * 100) | round(1) }}%</span>
+                <span class="stat-lbl">Accuracy</span>
+            </div>
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.dl_sensitivity.precision * 100) | round(1) }}%</span>
+                <span class="stat-lbl">Precision</span>
+            </div>
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.dl_sensitivity.recall * 100) | round(1) }}%</span>
+                <span class="stat-lbl">Recall</span>
+            </div>
+            <div class="mini-stat">
+                <span class="stat-num">{{ (metrics.dl_sensitivity.f1_score * 100) | round(1) }}%</span>
+                <span class="stat-lbl">F1-Score</span>
+            </div>
+        </div>
+
+        <div class="cm-box">
+            <h4>Confusion Matrix (DL Test Split):</h4>
+            <table class="cm-table">
+                <tr><th></th><th>Pred Non-Sensitive</th><th>Pred Sensitive</th></tr>
+                <tr><th>Actual Non-Sensitive</th><td>{{ metrics.dl_sensitivity.confusion_matrix[0][0] }}</td><td>{{ metrics.dl_sensitivity.confusion_matrix[0][1] }}</td></tr>
+                <tr><th>Actual Sensitive</th><td>{{ metrics.dl_sensitivity.confusion_matrix[1][0] }}</td><td>{{ metrics.dl_sensitivity.confusion_matrix[1][1] }}</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Before vs After Empirical System Comparison -->
+<div class="card margin-top">
+    <div class="card-header">
+        <div>
+            <h2>⚖️ Before vs. After System Experiment (Synthetic Dataset Evaluation)</h2>
+            <p>Empirical evaluation across all {{ comp_data.total_sessions_evaluated }} synthetic session records comparing raw baseline handover vs consent-aware system.</p>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Evaluation Metric</th>
+                    <th>Baseline System (Unfiltered)</th>
+                    <th>Proposed System (Consent-Aware)</th>
+                    <th>Empirical Improvement / Effect</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comp_data.metrics_table %}
+                <tr>
+                    <td><strong>{{ row.metric }}</strong></td>
+                    <td><span class="badge badge-danger">{{ row.baseline }}</span></td>
+                    <td><span class="badge badge-success">{{ row.proposed }}</span></td>
+                    <td><strong class="text-success">{{ row.improvement }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="chart-wrapper margin-top">
+        <h3>📊 Visual Before/After Comparison Chart</h3>
+        <div class="chart-container">
+            <canvas id="evalChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('evalChart').getContext('2d');
+    const categories = {{ comp_data.chart_data.categories | tojson }};
+    const baselineVals = {{ comp_data.chart_data.baseline_values | tojson }};
+    const proposedVals = {{ comp_data.chart_data.proposed_values | tojson }};
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: categories,
+            datasets: [
+                {
+                    label: 'Baseline System',
+                    data: baselineVals,
+                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Proposed System',
+                    data: proposedVals,
+                    backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

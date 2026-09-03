@@ -1,0 +1,59 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>All Helpline Sessions</h1>
+        <p class="page-subtitle">View and manage continuity handovers across synthetic client session records.</p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('create_session') }}" class="btn btn-primary">+ New Session</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Client ID</th>
+                    <th>Session ID</th>
+                    <th>Session Notes / Transcript Excerpt</th>
+                    <th>Consent (Sensitive)</th>
+                    <th>Relevance Label</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td><strong class="client-id-tag">{{ s.client_id }}</strong></td>
+                    <td><code>{{ s.session_id }}</code></td>
+                    <td class="text-truncate">{{ s.session_text[:80] }}...</td>
+                    <td>
+                        {% if s.consent_sensitive == 'Yes' %}
+                            <span class="badge badge-success">✓ Yes</span>
+                        {% else %}
+                            <span class="badge badge-danger">🔒 No (Restricted)</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if s.relevance_label == 1 %}
+                            <span class="badge badge-info">Relevant</span>
+                        {% else %}
+                            <span class="badge badge-neutral">Not Relevant</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-btns">
+                            <a href="{{ url_for('handover', session_id=s.session_id) }}" class="btn btn-xs btn-primary">View Handover</a>
+                            <a href="{{ url_for('edit_consent', session_id=s.session_id) }}" class="btn btn-xs btn-outline">Edit Consent</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

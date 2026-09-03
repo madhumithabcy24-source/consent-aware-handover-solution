@@ -1,0 +1,39 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Mandatory Edge &amp; Failure Test Cases</h1>
+        <p class="page-subtitle">Verification of system behavior under privacy constraints and edge conditions.</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Test Case ID</th>
+                    <th>Description</th>
+                    <th>Input Conditions</th>
+                    <th>Expected Output</th>
+                    <th>Actual System Output</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tc in test_cases %}
+                <tr>
+                    <td><code>{{ tc.id }}</code></td>
+                    <td><strong>{{ tc.title }}</strong></td>
+                    <td><small>{{ tc.input }}</small></td>
+                    <td><small>{{ tc.expected }}</small></td>
+                    <td><small>{{ tc.actual }}</small></td>
+                    <td><span class="badge badge-success">{{ tc.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

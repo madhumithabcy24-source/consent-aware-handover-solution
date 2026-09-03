@@ -1,0 +1,111 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>System Dashboard</h1>
+        <p class="page-subtitle">Consent-Aware Handover Monitoring &amp; Data Pipeline Statistics</p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('create_session') }}" class="btn btn-primary">+ Create Handover</a>
+        <a href="{{ url_for('user_guide') }}" class="btn btn-secondary">📖 User Guide</a>
+    </div>
+</div>
+
+<!-- Metrics Cards -->
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-icon blue">📁</div>
+        <div class="metric-content">
+            <span class="metric-value">{{ total_sessions }}</span>
+            <span class="metric-label">Total Sessions Recorded</span>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon green">🎯</div>
+        <div class="metric-content">
+            <span class="metric-value">{{ relevant_count }}</span>
+            <span class="metric-label">Relevant Handovers (ML)</span>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon purple">🧠</div>
+        <div class="metric-content">
+            <span class="metric-value">{{ sensitive_count }}</span>
+            <span class="metric-label">Sensitive Topics (DL)</span>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon amber">🔒</div>
+        <div class="metric-content">
+            <span class="metric-value">{{ protected_count }}</span>
+            <span class="metric-label">Consent Restricted Sessions</span>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-columns">
+    <!-- Recent Handovers -->
+    <div class="card col-main">
+        <div class="card-header">
+            <h3>Recent Session Handovers</h3>
+            <a href="{{ url_for('sessions') }}" class="btn btn-sm btn-outline">View All Handovers &rarr;</a>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Client ID</th>
+                        <th>Session ID</th>
+                        <th>Session Preview</th>
+                        <th>Role Target</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in recent_sessions %}
+                    <tr>
+                        <td><strong class="client-id-tag">{{ s.client_id }}</strong></td>
+                        <td><code>{{ s.session_id }}</code></td>
+                        <td class="text-truncate">{{ s.session_text[:65] }}...</td>
+                        <td><span class="role-pill">{{ s.consent_sensitive }}</span></td>
+                        <td>
+                            <div class="action-btns">
+                                <a href="{{ url_for('handover', session_id=s.session_id) }}" class="btn btn-xs btn-primary">View Handover</a>
+                                <a href="{{ url_for('edit_consent', session_id=s.session_id) }}" class="btn btn-xs btn-outline">Manage Consent</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Audit Logs -->
+    <div class="card col-side">
+        <div class="card-header">
+            <h3>🛡️ Access Audit Logs</h3>
+        </div>
+        <div class="audit-list">
+            {% if audit_logs %}
+                {% for log in audit_logs %}
+                <div class="audit-item">
+                    <div class="audit-header">
+                        <span class="role-badge {{ log.user_role | lower | replace(' ', '-') }}">{{ log.user_role }}</span>
+                        <span class="audit-time">{{ log.timestamp.split()[1] if log.timestamp else '' }}</span>
+                    </div>
+                    <p class="audit-session">Session: <code>{{ log.session_id }}</code></p>
+                    <div class="audit-status">
+                        <span class="status-tag shared">{{ log.information_shared }}</span>
+                        <span class="status-tag restricted">{{ log.information_restricted }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty-state">No audit logs recorded yet. View handovers to generate access logs.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

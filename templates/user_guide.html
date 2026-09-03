@@ -1,0 +1,75 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>📖 System User Guide &amp; Technical Documentation</h1>
+        <p class="page-subtitle">Demonstration guide for viva, evaluation, and operational workflow.</p>
+    </div>
+</div>
+
+<div class="user-guide-container">
+    <!-- Voice Contact Representation Banner -->
+    <div class="card info-banner">
+        <h3>📞 Voice Contact Representation Note</h3>
+        <p>In a real-world youth helpline, client interactions occur via both text chat and voice phone calls. In this MVP, <strong>voice contacts are represented as synthetic transcribed text</strong> (prefixed with <code>[Voice Transcript]</code>). The preprocessing and NLP pipeline ingests these transcripts identically to text chat logs.</p>
+    </div>
+
+    <!-- Processing Pipeline Overview -->
+    <div class="card guide-card">
+        <h2>1. System Processing Pipeline</h2>
+        <div class="pipeline-flow-box">
+            <div class="flow-step">1. Session Input<br><small>(Chat / Voice Transcript)</small></div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step">2. Preprocessing &amp; Normalization</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step">3. ML Relevance Classifier</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step">4. DL Sensitivity Detector</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step highlight-step">5. Consent Engine Check</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step highlight-step">6. RBAC Role Check</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-step">7. Continuity Summary</div>
+        </div>
+        <p class="guide-note"><strong>Golden Governance Rule:</strong> Steps 5 and 6 (Consent and Role Access) unconditionally override ML and DL model outputs. Information is NEVER displayed without valid client consent and role authorization.</p>
+    </div>
+
+    <!-- How to Use Features -->
+    <div class="card guide-card">
+        <h2>2. Key Features &amp; Demonstration Steps</h2>
+
+        <div class="guide-feature-item">
+            <h3>A. Viewing Handover Summaries</h3>
+            <p>Navigate to <strong>Sessions</strong> and click <strong>View Handover</strong> on any record. The system runs ML relevance, DL sensitivity detection, consent verification, and role filtering to generate a safe continuity summary.</p>
+        </div>
+
+        <div class="guide-feature-item">
+            <h3>B. Real-Time Consent Revocation</h3>
+            <p>Navigate to <strong>Manage Consent</strong> for any session (or click <strong>Edit / Revoke Consent</strong> on the handover page). Toggle <em>Sensitive Notes Consent</em> to <strong>No</strong> and save. Upon viewing the next summary, the sensitive content immediately updates to display <code>🔒 Restricted by consent</code>.</p>
+        </div>
+
+        <div class="guide-feature-item">
+            <h3>C. Role-Based Access Control (RBAC)</h3>
+            <p>Log in as <code>socialworker</code> / <code>1234</code>. Observe that sensitive clinical disclosures remain restricted with <code>🔒 Restricted by role</code> by default, even if the client granted consent, because Social Worker scope is restricted to non-clinical social care handovers.</p>
+        </div>
+
+        <div class="guide-feature-item">
+            <h3>D. Low-Confidence Human Review Flag</h3>
+            <p>When the ML relevance or DL sensitivity prediction confidence falls below <strong>70%</strong>, the system displays a prominent <strong>⚠️ Low Confidence Warning Banner</strong> notifying the worker that human review is recommended before taking clinical action.</p>
+        </div>
+
+        <div class="guide-feature-item">
+            <h3>E. Baseline vs. Proposed System Comparison</h3>
+            <p>Navigate to <strong>Baseline vs Proposed</strong> to compare the raw un-filtered baseline handover against the safe proposed system side-by-side. The interactive Chart.js bar chart illustrates reductions in consent violations and sensitive content exposure.</p>
+        </div>
+    </div>
+
+    <!-- Viva Q&A Quick Reference Link -->
+    <div class="card guide-card">
+        <h2>3. Viva Examination Preparation</h2>
+        <p>For detailed answers to the 22 standard viva examination questions (such as <em>"Why TF-IDF + Logistic Regression?"</em> and <em>"Why can't ML override consent?"</em>), consult the <strong>VIVA EXPLANATION</strong> section in <code>README.md</code>.</p>
+    </div>
+</div>
+{% endblock %}

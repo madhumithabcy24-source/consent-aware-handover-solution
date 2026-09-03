@@ -1,0 +1,141 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Baseline vs. Proposed System Comparison</h1>
+        <p class="page-subtitle">Demonstrating how the Proposed System protects privacy compared to a standard un-filtered baseline.</p>
+    </div>
+</div>
+
+<div class="card selector-card">
+    <form method="GET" action="{{ url_for('baseline') }}" class="selector-form">
+        <label for="session_id"><strong>Select Session Record to Compare:</strong></label>
+        <select name="session_id" id="session_id" onchange="this.form.submit()">
+            {% for s in sessions %}
+            <option value="{{ s.session_id }}" {% if selected_session and selected_session.session_id == s.session_id %}selected{% endif %}>
+                Session {{ s.session_id }} (Client {{ s.client_id }})
+            </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">Compare Session</button>
+    </form>
+</div>
+
+{% if selected_session and summary %}
+<div class="comparison-grid">
+    <!-- BASELINE SYSTEM CARD -->
+    <div class="card system-card baseline-card">
+        <div class="system-card-header">
+            <h3>❌ BASELINE SYSTEM</h3>
+            <span class="system-tag">Raw / Unfiltered Handover</span>
+        </div>
+        <p class="system-desc">Displays raw session content without ML relevance filtering, DL sensitivity detection, consent checks, or role restrictions.</p>
+
+        <div class="summary-section">
+            <span class="section-label">Raw Session Text:</span>
+            <div class="summary-content-box raw-box">{{ selected_session.session_text }}</div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Raw Goal:</span>
+            <div class="summary-content-box raw-box">{{ selected_session.client_goal or 'None' }}</div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Raw Pending Action:</span>
+            <div class="summary-content-box raw-box">{{ selected_session.pending_action or 'None' }}</div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Raw Sensitive Disclosures:</span>
+            <div class="summary-content-box raw-box danger-border">{{ selected_session.sensitive_text or 'None' }}</div>
+        </div>
+
+        <div class="system-status-banner warning">
+            ⚠️ <strong>Risk Exposure:</strong> Displays confidential disclosures even when client consent is DENIED!
+        </div>
+    </div>
+
+    <!-- PROPOSED SYSTEM CARD -->
+    <div class="card system-card proposed-card">
+        <div class="system-card-header">
+            <h3>✅ PROPOSED SYSTEM</h3>
+            <span class="system-tag proposed">Consent-Aware &amp; Role-Filtered</span>
+        </div>
+        <p class="system-desc">Filters session details using ML relevance, DL sensitivity detection, client consent rules, and role-based access control (Viewing as: {{ user_role }}).</p>
+
+        <div class="summary-section">
+            <span class="section-label">Filtered Session Notes:</span>
+            <div class="summary-content-box {% if 'Restricted' in summary.summary_text %}restricted{% endif %}">{{ summary.summary_text }}</div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Filtered Goal:</span>
+            <div class="summary-content-box {% if 'Restricted' in summary.client_goal %}restricted{% endif %}">{{ summary.client_goal }}</div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Filtered Pending Action:</span>
+            <div class="summary-content-box {% if 'Restricted' in summary.pending_action %}restricted{% endif %}">{{ summary.pending_action }}</div>
+        </div>
+
+        <div class="summary-section">
+            <span class="section-label">Protected Sensitive Disclosures:</span>
+            <div class="summary-content-box sensitive-box {% if 'Restricted' in summary.sensitive_text %}restricted{% endif %}">{{ summary.sensitive_text }}</div>
+        </div>
+
+        <div class="system-status-banner success">
+            🛡️ <strong>Privacy Protection:</strong> Consent &amp; RBAC override model outputs, completely eliminating unauthorized exposure.
+        </div>
+    </div>
+</div>
+
+<!-- Empirical Metric Comparison Chart -->
+<div class="card chart-card margin-top">
+    <h3>📊 Empirical Metric Comparison across {{ comp_data.total_sessions_evaluated }} Sessions</h3>
+    <div class="chart-container">
+        <canvas id="baselineChart"></canvas>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const ctx = document.getElementById('baselineChart').getContext('2d');
+    const categories = {{ comp_data.chart_data.categories | tojson }};
+    const baselineVals = {{ comp_data.chart_data.baseline_values | tojson }};
+    const proposedVals = {{ comp_data.chart_data.proposed_values | tojson }};
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: categories,
+            datasets: [
+                {
+                    label: 'Baseline System (Unfiltered)',
+                    data: baselineVals,
+                    backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Proposed System (Consent-Aware)',
+                    data: proposedVals,
+                    backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

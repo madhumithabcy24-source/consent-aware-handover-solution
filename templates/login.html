@@ -1,0 +1,52 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-icon">🛡️</div>
+            <h2>Youth Helpline Handover</h2>
+            <p class="login-subtitle">Consent-Aware Continuity Summary System</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('login') }}" class="login-form">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="e.g. counsellor or socialworker" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter password (1234)" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">Sign In to Dashboard</button>
+        </form>
+
+        <div class="demo-accounts-box">
+            <h4>🔑 Demo Quick Login Credentials</h4>
+            <div class="demo-role-grid">
+                <div class="demo-role-card" onclick="fillLogin('counsellor', '1234')">
+                    <span class="role-badge counsellor">Counsellor</span>
+                    <p><strong>Username:</strong> counsellor</p>
+                    <p><strong>Password:</strong> 1234</p>
+                    <span class="click-hint">Click to quick fill &rarr;</span>
+                </div>
+                <div class="demo-role-card" onclick="fillLogin('socialworker', '1234')">
+                    <span class="role-badge social-worker">Social Worker</span>
+                    <p><strong>Username:</strong> socialworker</p>
+                    <p><strong>Password:</strong> 1234</p>
+                    <span class="click-hint">Click to quick fill &rarr;</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function fillLogin(u, p) {
+    document.getElementById('username').value = u;
+    document.getElementById('password').value = p;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consent-Aware Youth Helpline Handover System</title>
+    <!-- Google Fonts & Chart.js -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% if current_user %}
+    <header class="navbar">
+        <div class="nav-brand">
+            <span class="brand-icon">🛡️</span>
+            <div class="brand-text">
+                <span class="brand-title">Youth Helpline Handover</span>
+                <span class="brand-subtitle">Consent-Aware Continuity System</span>
+            </div>
+        </div>
+        <nav class="nav-links">
+            <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('sessions') }}" class="nav-link {% if request.endpoint in ['sessions', 'edit_consent'] %}active{% endif %}">Sessions</a>
+            <a href="{{ url_for('create_session') }}" class="nav-link {% if request.endpoint == 'create_session' %}active{% endif %}">+ New Handover</a>
+            <a href="{{ url_for('baseline') }}" class="nav-link {% if request.endpoint == 'baseline' %}active{% endif %}">Baseline vs Proposed</a>
+            <a href="{{ url_for('evaluation') }}" class="nav-link {% if request.endpoint == 'evaluation' %}active{% endif %}">Evaluation & Charts</a>
+            <a href="{{ url_for('user_guide') }}" class="nav-link {% if request.endpoint == 'user_guide' %}active{% endif %}">User Guide</a>
+            <a href="{{ url_for('test_cases') }}" class="nav-link {% if request.endpoint == 'test_cases' %}active{% endif %}">Test Cases</a>
+            <a href="{{ url_for('models_info') }}" class="nav-link {% if request.endpoint == 'models_info' %}active{% endif %}">Models</a>
+        </nav>
+        <div class="user-badge">
+            <span class="user-role-tag {{ user_role | lower | replace(' ', '-') }}">{{ user_role }}</span>
+            <span class="user-name">{{ current_user }}</span>
+            <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">🚪 Logout</a>
+        </div>
+    </header>
+    {% endif %}
+
+    <main class="main-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash-alert alert-{{ category }}">
+                        <span class="alert-icon">
+                            {% if category == 'success' %}✅{% elif category == 'danger' %}⚠️{% elif category == 'warning' %}🔔{% else %}ℹ️{% endif %}
+                        </span>
+                        <span>{{ message }}</span>
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="app-footer">
+        <p>Consent-Aware Continuity Summary System MVP &bull; Youth Helpline Handovers &bull; Synthetic Data Only</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
