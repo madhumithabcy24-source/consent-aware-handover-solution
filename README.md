@@ -124,5 +124,52 @@ Open your browser and navigate to:
 - **Production Governance:** Real deployment would require HIPAA/GDPR compliance reviews, encryption at rest, and OAuth2/SAML integration.
 
 ---
+## Review 1 – Current Project Status
+
+### Project Progress
+
+The project has progressed beyond the minimum Review 1 milestone and currently has a functional end-to-end MVP/prototype.
+
+The Review 1 submission demonstrates the core workflow of a consent-aware youth helpline handover system.
+
+### Completed Features
+
+- Flask-based web application
+- SQLite database integration
+- Counsellor and Social Worker role-based login
+- Session creation and management
+- Consent-aware information sharing
+- Role-based visibility of sensitive information
+- ML-based handover relevance classification
+- DL-based sensitive content detection
+- Structured continuity summary generation
+- Baseline vs Proposed comparison
+- Evaluation metrics and results
+- Failure and edge-case test scenarios
+- Audit logging for handover activities
+- Synthetic/de-identified dataset for testing
+- Project documentation and user guidance
+
+### Current Working Status
+
+The core application workflow is functional and can be demonstrated through the web interface.
+
+The system can process a synthetic session, apply relevance and sensitivity detection, enforce consent rules, apply role-based access control, and generate an appropriate handover summary.
+
+### Planned Improvements
+
+Further development will focus on:
+
+- Additional testing with more diverse synthetic scenarios
+- Improving ML/DL model performance
+- More detailed error analysis
+- Stakeholder/user validation
+- Additional privacy and security hardening
+- Improved deployment and reproducibility
+- Final documentation and presentation preparation
+
+### Review 1 Note
+
+Although the functional MVP currently demonstrates most of the core system workflow, the project will continue to be refined and validated through the subsequent development stages.
 
 
