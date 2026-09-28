@@ -4,11 +4,12 @@
 <div class="page-header">
     <div>
         <h1>Model Evaluation &amp; Before/After System Experiment</h1>
-        <p class="page-subtitle">Actual evaluation metrics calculated from test split and empirical dataset evaluation.</p>
+        <p class="page-subtitle">Real empirical evaluation metrics calculated from test split predictions and dataset ground-truth labels.</p>
     </div>
 </div>
 
-<!-- ML & DL Model Performance Cards -->
+<!-- SECTION 1: MODEL PERFORMANCE METRICS -->
+<h2 class="section-title">🤖 1. Model Performance Metrics (Test Split Evaluation)</h2>
 <div class="eval-grid">
     <!-- ML Relevance Model -->
     <div class="card eval-card">
@@ -79,12 +80,53 @@
     </div>
 </div>
 
-<!-- Before vs After Empirical System Comparison -->
-<div class="card margin-top">
+<!-- SECTION 2: PRIVACY METRICS HIGHLIGHT -->
+<h2 class="section-title margin-top">🛡️ 2. Privacy Metrics & Redaction Leakage Rate</h2>
+<div class="dashboard-stats-grid">
+    <div class="stat-card">
+        <span class="stat-icon">🔻</span>
+        <div class="stat-info">
+            <h4>Redaction Leakage Rate</h4>
+            <div class="stat-value text-success">{{ comp_data.privacy_metrics.redaction_leakage_rate.proposed }}</div>
+            <span class="stat-subtext">Baseline: {{ comp_data.privacy_metrics.redaction_leakage_rate.baseline }}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-icon">🚫</span>
+        <div class="stat-info">
+            <h4>Consent Violations</h4>
+            <div class="stat-value text-success">{{ comp_data.privacy_metrics.consent_violations.proposed }}</div>
+            <span class="stat-subtext">Baseline: {{ comp_data.privacy_metrics.consent_violations.baseline }}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-icon">🔒</span>
+        <div class="stat-info">
+            <h4>Sensitive Items Protected</h4>
+            <div class="stat-value text-success">{{ comp_data.privacy_metrics.sensitive_protected.proposed }}</div>
+            <span class="stat-subtext">Baseline: {{ comp_data.privacy_metrics.sensitive_protected.baseline }}</span>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-icon">👁️</span>
+        <div class="stat-info">
+            <h4>Sensitive Exposures</h4>
+            <div class="stat-value text-success">{{ comp_data.privacy_metrics.sensitive_exposures.proposed }}</div>
+            <span class="stat-subtext">Baseline: {{ comp_data.privacy_metrics.sensitive_exposures.baseline }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 3: BASELINE VS PROPOSED COMPARISON TABLE & CHART -->
+<h2 class="section-title margin-top">📋 3. System Comparison (Baseline vs Proposed)</h2>
+<div class="card">
     <div class="card-header">
         <div>
-            <h2>⚖️ Before vs. After System Experiment (Synthetic Dataset Evaluation)</h2>
-            <p>Empirical evaluation across all {{ comp_data.total_sessions_evaluated }} synthetic session records comparing raw baseline handover vs consent-aware system.</p>
+            <h2>⚖️ Before vs. After System Experiment</h2>
+            <p>Evaluated across all {{ comp_data.total_sessions_evaluated }} synthetic session records comparing un-filtered baseline vs consent-aware handover.</p>
         </div>
     </div>
 
@@ -112,7 +154,7 @@
     </div>
 
     <div class="chart-wrapper margin-top">
-        <h3>📊 Visual Before/After Comparison Chart</h3>
+        <h3>📊 Visual Metrics Comparison Chart</h3>
         <div class="chart-container">
             <canvas id="evalChart"></canvas>
         </div>

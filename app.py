@@ -1,23 +1,30 @@
 import os
 import functools
+import markupsafe
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 
 from database import (
-    init_db, get_user, get_all_sessions, get_session_by_id,
-    add_session, update_session_consent, log_handover_access, get_all_handover_logs
+    init_db, get_user, verify_user_password, get_all_sessions, get_session_by_id,
+    add_session, update_session_consent, log_handover_access, log_audit_event, get_all_handover_logs
 )
 from summary_generator import generate_continuity_summary
 from preprocess import load_and_preprocess_data
 from evaluation import get_model_evaluation_metrics, evaluate_baseline_vs_proposed
+from tests.test_system import run_all_failure_tests
 
 app = Flask(__name__)
 app.secret_key = 'youth_helpline_handover_secret_key_demo'
+
+# Security Hardening Session Cookie Configurations
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30 minutes
 
 # Initialize SQLite database on startup
 init_db()
 
 def login_required(view):
-    """Decorator to enforce login on protected routes."""
+    """Decorator to enforce backend login authentication on protected routes."""
     @functools.wraps(view)
     def wrapped_view(**kwargs):
         if 'username' not in session:
@@ -28,7 +35,7 @@ def login_required(view):
 
 @app.context_processor
 def inject_user():
-    """Injects current user info into template context."""
+    """Injects current user info into template context safely."""
     return {
         'current_user': session.get('username'),
         'user_role': session.get('role', 'Counsellor')
@@ -47,19 +54,30 @@ def login():
         password = request.form.get('password', '').strip()
 
         user = get_user(username)
-        if user and user['password'] == password:
+        if user and verify_user_password(user['password'], password):
             session.clear()
             session['username'] = user['username']
             session['role'] = user['role']
+            
+            # Security audit log
+            log_audit_event("N/A", user['role'], "login", f"User '{username}' logged in", "None")
+            
             flash(f"Welcome back, {user['username']}! Logged in as {user['role']}.", "success")
             return redirect(url_for('dashboard'))
         else:
+            # Audit log failed login attempt
+            log_audit_event("N/A", "Unknown", "failed_login_attempt", "Failed login attempt", f"Username: {username}")
             flash("Invalid username or password. Demo accounts: counsellor/1234 or socialworker/1234", "danger")
 
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
+    user = session.get('username', 'Unknown')
+    role = session.get('role', 'Unknown')
+    
+    log_audit_event("N/A", role, "logout", f"User '{user}' logged out", "None")
+    
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for('login'))
@@ -70,7 +88,6 @@ def dashboard():
     sessions_list = get_all_sessions()
     total_sessions = len(sessions_list)
     
-    # Calculate stats
     relevant_count = 0
     sensitive_count = 0
     protected_count = 0
@@ -85,7 +102,7 @@ def dashboard():
             protected_count += 1
 
     recent_sessions = sessions_list[:8]
-    audit_logs = get_all_handover_logs()[:5]
+    audit_logs = get_all_handover_logs()[:8]
 
     return render_template('dashboard.html',
                            total_sessions=total_sessions,
@@ -99,12 +116,13 @@ def dashboard():
 @login_required
 def create_session():
     if request.method == 'POST':
-        client_id = request.form.get('client_id', '').strip()
-        session_id = request.form.get('session_id', '').strip()
-        session_text = request.form.get('session_text', '').strip()
-        client_goal = request.form.get('client_goal', '').strip()
-        pending_action = request.form.get('pending_action', '').strip()
-        sensitive_text = request.form.get('sensitive_text', '').strip()
+        # Input Sanitization and Validation
+        client_id = markupsafe.escape(request.form.get('client_id', '').strip())
+        session_id = markupsafe.escape(request.form.get('session_id', '').strip())
+        session_text = markupsafe.escape(request.form.get('session_text', '').strip())
+        client_goal = markupsafe.escape(request.form.get('client_goal', '').strip())
+        pending_action = markupsafe.escape(request.form.get('pending_action', '').strip())
+        sensitive_text = markupsafe.escape(request.form.get('sensitive_text', '').strip())
 
         consent_summary = request.form.get('consent_summary', 'No')
         consent_goal = request.form.get('consent_goal', 'No')
@@ -115,18 +133,17 @@ def create_session():
             flash("Client ID, Session ID, and Session Text are required.", "danger")
             return redirect(url_for('create_session'))
 
-        # Check existing session ID
         if get_session_by_id(session_id):
             flash(f"Session ID '{session_id}' already exists. Please use a unique ID.", "danger")
             return redirect(url_for('create_session'))
 
         session_data = {
-            'client_id': client_id,
-            'session_id': session_id,
-            'session_text': session_text,
-            'client_goal': client_goal,
-            'pending_action': pending_action,
-            'sensitive_text': sensitive_text,
+            'client_id': str(client_id),
+            'session_id': str(session_id),
+            'session_text': str(session_text),
+            'client_goal': str(client_goal),
+            'pending_action': str(pending_action),
+            'sensitive_text': str(sensitive_text),
             'consent_summary': consent_summary,
             'consent_goal': consent_goal,
             'consent_pending_action': consent_pending_action,
@@ -134,10 +151,10 @@ def create_session():
         }
 
         add_session(session_data)
+        log_audit_event(session_id, session.get('role', 'Counsellor'), "session_created", "Created new handover session record", "None")
         flash(f"Session '{session_id}' created successfully!", "success")
         return redirect(url_for('handover', session_id=session_id))
 
-    # Auto-generate suggestion ID
     existing_count = len(get_all_sessions())
     next_client_id = f"C{(existing_count % 25) + 1:03d}"
     next_session_id = f"S{existing_count + 1:03d}"
@@ -168,6 +185,8 @@ def edit_consent(session_id):
         consent_sensitive = request.form.get('consent_sensitive', 'No')
 
         update_session_consent(session_id, consent_summary, consent_goal, consent_pending_action, consent_sensitive)
+        log_audit_event(session_id, session.get('role', 'Counsellor'), "consent_updated", f"Consent modified: Summary={consent_summary}, Goal={consent_goal}, Pending={consent_pending_action}, Sensitive={consent_sensitive}", "None")
+        
         flash(f"Consent preferences updated for Session '{session_id}'. Next handover will immediately reflect changes.", "success")
         return redirect(url_for('handover', session_id=session_id))
 
@@ -184,7 +203,6 @@ def handover(session_id):
     user_role = session.get('role', 'Counsellor')
     summary_obj = generate_continuity_summary(dict(session_record), user_role=user_role)
 
-    # Prepare audit log categories (NO sensitive text stored)
     shared_cats = []
     restricted_cats = []
 
@@ -193,7 +211,7 @@ def handover(session_id):
         if access['allowed']:
             shared_cats.append(f"{cat.capitalize()}: Shared")
         else:
-            restricted_cats.append(f"{cat.capitalize()}: Restricted")
+            restricted_cats.append(f"{cat.capitalize()}: Restricted ({access['display_text']})")
 
     log_handover_access(session_id, user_role, shared_cats, restricted_cats)
 
@@ -237,48 +255,7 @@ def user_guide():
 @app.route('/test-cases')
 @login_required
 def test_cases():
-    test_cases_list = [
-        {
-            "id": "CASE 1",
-            "title": "Consent Denied",
-            "input": "client_goal = 'Improve study focus', consent_summary = 'No'",
-            "expected": "Information hidden ('🔒 Restricted by consent')",
-            "actual": "Information hidden ('🔒 Restricted by consent')",
-            "status": "PASS"
-        },
-        {
-            "id": "CASE 2",
-            "title": "Sensitive Content Detected + Consent Denied",
-            "input": "sensitive_text = 'Confidential personal disclosures', consent_sensitive = 'No'",
-            "expected": "Information remains hidden ('🔒 Restricted by consent')",
-            "actual": "Information remains hidden ('🔒 Restricted by consent')",
-            "status": "PASS"
-        },
-        {
-            "id": "CASE 3",
-            "title": "Social Worker Access to Restricted Sensitive Content",
-            "input": "user_role = 'Social Worker', consent_sensitive = 'Yes'",
-            "expected": "Access denied ('🔒 Restricted by role')",
-            "actual": "Access denied ('🔒 Restricted by role')",
-            "status": "PASS"
-        },
-        {
-            "id": "CASE 4",
-            "title": "Missing Pending Action",
-            "input": "pending_action = '' (Empty string)",
-            "expected": "'No pending action recorded.' (No crash)",
-            "actual": "'No pending action recorded.'",
-            "status": "PASS"
-        },
-        {
-            "id": "CASE 5",
-            "title": "Consent Revoked in Real-Time",
-            "input": "consent_sensitive updated from 'Yes' -> 'No'",
-            "expected": "Sensitive info becomes hidden immediately upon next summary",
-            "actual": "Sensitive info becomes hidden immediately upon next summary",
-            "status": "PASS"
-        }
-    ]
+    test_cases_list = run_all_failure_tests()
     return render_template('test_cases.html', test_cases=test_cases_list)
 
 @app.route('/models')

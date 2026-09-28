@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import pandas as pd
+from werkzeug.security import generate_password_hash, check_password_hash
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'youth_helpline.db')
 CSV_PATH = os.path.join(os.path.dirname(__file__), 'data', 'synthetic_sessions.csv')
@@ -13,7 +14,7 @@ def get_db_connection():
 
 def init_db():
     """
-    Initializes SQLite database tables and seeds demo users & synthetic session dataset.
+    Initializes SQLite database tables, performs auto-migrations, and seeds demo users & synthetic sessions.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -46,30 +47,41 @@ def init_db():
         )
     ''')
 
-    # 3. Handover Audit Logs Table (NO raw sensitive text stored)
+    # 3. Handover & Security Audit Logs Table (NO raw sensitive text stored)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS handover_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
             user_role TEXT NOT NULL,
+            event_type TEXT DEFAULT 'handover_access',
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             information_shared TEXT NOT NULL,
             information_restricted TEXT NOT NULL
         )
     ''')
 
+    # Auto-migration: Ensure event_type column exists on pre-existing database tables
+    cursor.execute("PRAGMA table_info(handover_logs)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'event_type' not in columns:
+        try:
+            cursor.execute("ALTER TABLE handover_logs ADD COLUMN event_type TEXT DEFAULT 'handover_access'")
+            print("[INFO] Migrated database schema: Added 'event_type' column to 'handover_logs'")
+        except Exception as e:
+            print(f"[WARNING] Table migration skipped or failed: {e}")
+
     conn.commit()
 
-    # Seed Demo Users
+    # Seed Demo Users with Secure Password Hashes
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
         demo_users = [
-            ('counsellor', '1234', 'Counsellor'),
-            ('socialworker', '1234', 'Social Worker')
+            ('counsellor', generate_password_hash('1234'), 'Counsellor'),
+            ('socialworker', generate_password_hash('1234'), 'Social Worker')
         ]
         cursor.executemany("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", demo_users)
         conn.commit()
-        print("[SUCCESS] Seeded demo users: 'counsellor' and 'socialworker'")
+        print("[SUCCESS] Seeded demo users with hashed passwords: 'counsellor' and 'socialworker'")
 
     # Seed Synthetic Sessions from CSV
     cursor.execute("SELECT COUNT(*) FROM sessions")
@@ -105,6 +117,12 @@ def get_user(username):
     conn.close()
     return user
 
+def verify_user_password(stored_password, provided_password):
+    """Verifies password using Werkzeug check_password_hash with fallback for plain text."""
+    if stored_password.startswith('scrypt:') or stored_password.startswith('pbkdf2:'):
+        return check_password_hash(stored_password, provided_password)
+    return stored_password == provided_password
+
 def get_all_sessions():
     """Fetches all session records ordered by session_id."""
     conn = get_db_connection()
@@ -120,7 +138,7 @@ def get_session_by_id(session_id):
     return session
 
 def add_session(session_data):
-    """Inserts a new session record into SQLite."""
+    """Inserts a new session record into SQLite using parameterized queries."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
@@ -158,20 +176,33 @@ def update_session_consent(session_id, consent_summary, consent_goal, consent_pe
     conn.commit()
     conn.close()
 
-def log_handover_access(session_id, user_role, shared_categories, restricted_categories):
+def log_audit_event(session_id, user_role, event_type, shared_info, restricted_info):
     """
-    Creates an audit log for handover access.
-    NOTE: Only category status names (e.g. 'Summary: Shared', 'Sensitive: Restricted') are stored.
-    NO raw sensitive text is ever written to audit logs.
+    Creates an audit log entry for security and privacy events.
+    CRITICAL: NO raw sensitive session text is EVER recorded. Only metadata and status summaries.
+    Events: 'login', 'logout', 'handover_access', 'restricted_access_attempt', 'consent_filtering', 'role_denial'
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO handover_logs (session_id, user_role, information_shared, information_restricted)
-        VALUES (?, ?, ?, ?)
-    ''', (session_id, user_role, ", ".join(shared_categories), ", ".join(restricted_categories)))
+        INSERT INTO handover_logs (session_id, user_role, event_type, information_shared, information_restricted)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (session_id, user_role, event_type, str(shared_info), str(restricted_info)))
     conn.commit()
     conn.close()
+
+def log_handover_access(session_id, user_role, shared_categories, restricted_categories):
+    """Backward-compatible audit logger for handover access."""
+    event_type = 'handover_access'
+    if any('Restricted' in r for r in restricted_categories):
+        event_type = 'consent_or_role_filtering'
+    log_audit_event(
+        session_id=session_id,
+        user_role=user_role,
+        event_type=event_type,
+        shared_info=", ".join(shared_categories) if shared_categories else "None",
+        restricted_info=", ".join(restricted_categories) if restricted_categories else "None"
+    )
 
 def get_all_handover_logs():
     """Fetches recent audit logs."""
@@ -181,5 +212,5 @@ def get_all_handover_logs():
     return logs
 
 if __name__ == '__main__':
-    print("=== DATABASE INITIALIZATION ===")
+    print("=== DATABASE INITIALIZATION & MIGRATION ===")
     init_db()
