@@ -1,4 +1,5 @@
 import os
+import functools
 import joblib
 import numpy as np
 import pandas as pd
@@ -12,6 +13,19 @@ from preprocess import load_and_preprocess_data
 MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
 MODEL_PATH = os.path.join(MODELS_DIR, 'relevance_model.pkl')
 VECTORIZER_PATH = os.path.join(MODELS_DIR, 'tfidf_vectorizer.pkl')
+
+@functools.lru_cache(maxsize=1)
+def load_ml_model_and_vectorizer():
+    """
+    Loads and caches the ML relevance model and TF-IDF vectorizer in memory.
+    Prevents reloading and unpickling model from disk on every prediction call.
+    """
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(VECTORIZER_PATH):
+        train_and_evaluate_ml()
+
+    model = joblib.load(MODEL_PATH)
+    vectorizer = joblib.load(VECTORIZER_PATH)
+    return model, vectorizer
 
 def train_and_evaluate_ml():
     """
@@ -56,6 +70,9 @@ def train_and_evaluate_ml():
     joblib.dump(model, MODEL_PATH)
     joblib.dump(vectorizer, VECTORIZER_PATH)
 
+    # Clear cached model in case of retraining
+    load_ml_model_and_vectorizer.cache_clear()
+
     metrics = {
         "accuracy": round(acc, 4),
         "precision": round(prec, 4),
@@ -71,34 +88,50 @@ def train_and_evaluate_ml():
 
 def predict_relevance(text_content):
     """
-    Predicts relevance for a given session text snippet.
-    Returns:
-        dict: {
-            "prediction": 1 (Relevant) or 0 (Not Relevant),
-            "label": "Relevant" or "Not Relevant",
-            "confidence": percentage (float e.g. 92.5),
-            "low_confidence_flag": True if confidence < 70.0
-        }
+    Predicts relevance for a single text input using cached ML model & vectorizer.
     """
-    if not os.path.exists(MODEL_PATH) or not os.path.exists(VECTORIZER_PATH):
-        train_and_evaluate_ml()
-
-    model = joblib.load(MODEL_PATH)
-    vectorizer = joblib.load(VECTORIZER_PATH)
-
-    normalized_input = str(text_content).lower().strip()
-    vec = vectorizer.transform([normalized_input])
-    
-    pred = int(model.predict(vec)[0])
-    probs = model.predict_proba(vec)[0]
-    conf_score = float(probs[pred]) * 100.0
-
-    return {
-        "prediction": pred,
-        "label": "Relevant" if pred == 1 else "Not Relevant",
-        "confidence": round(conf_score, 1),
-        "low_confidence_flag": bool(conf_score < 70.0)
+    res = predict_relevance_batch([text_content])
+    return res[0] if res else {
+        "prediction": 0,
+        "label": "Not Relevant",
+        "confidence": 50.0,
+        "low_confidence_flag": True
     }
+
+def predict_relevance_batch(text_list):
+    """
+    Predicts relevance for a list of session text snippets in a SINGLE batch pass.
+    Transforms all texts with the cached TF-IDF vectorizer in one operation.
+    
+    Args:
+        text_list (list of str): List of session text strings.
+        
+    Returns:
+        list of dict: List of ML prediction result objects.
+    """
+    if not text_list:
+        return []
+
+    model, vectorizer = load_ml_model_and_vectorizer()
+
+    normalized_inputs = [str(t).lower().strip() for t in text_list]
+    vec = vectorizer.transform(normalized_inputs)
+    
+    preds = model.predict(vec)
+    probs = model.predict_proba(vec)
+
+    results = []
+    for pred, prob_pair in zip(preds, probs):
+        p_val = int(pred)
+        conf_score = float(prob_pair[p_val]) * 100.0
+        results.append({
+            "prediction": p_val,
+            "label": "Relevant" if p_val == 1 else "Not Relevant",
+            "confidence": round(conf_score, 1),
+            "low_confidence_flag": bool(conf_score < 70.0)
+        })
+
+    return results
 
 if __name__ == '__main__':
     print("=== ML RELEVANCE MODEL TRAINING ===")

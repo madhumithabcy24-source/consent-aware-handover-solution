@@ -1,4 +1,5 @@
 import os
+import time
 import functools
 import markupsafe
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
@@ -9,7 +10,7 @@ from database import (
 )
 from summary_generator import generate_continuity_summary
 from preprocess import load_and_preprocess_data
-from evaluation import get_model_evaluation_metrics, evaluate_baseline_vs_proposed
+from evaluation import get_model_evaluation_metrics, evaluate_baseline_vs_proposed, clear_evaluation_cache
 from tests.test_system import run_all_failure_tests
 
 app = Flask(__name__)
@@ -151,6 +152,7 @@ def create_session():
         }
 
         add_session(session_data)
+        clear_evaluation_cache()  # Invalidate aggregate evaluation cache on new session
         log_audit_event(session_id, session.get('role', 'Counsellor'), "session_created", "Created new handover session record", "None")
         flash(f"Session '{session_id}' created successfully!", "success")
         return redirect(url_for('handover', session_id=session_id))
@@ -185,6 +187,7 @@ def edit_consent(session_id):
         consent_sensitive = request.form.get('consent_sensitive', 'No')
 
         update_session_consent(session_id, consent_summary, consent_goal, consent_pending_action, consent_sensitive)
+        clear_evaluation_cache()  # Invalidate aggregate evaluation cache on consent update
         log_audit_event(session_id, session.get('role', 'Counsellor'), "consent_updated", f"Consent modified: Summary={consent_summary}, Goal={consent_goal}, Pending={consent_pending_action}, Sensitive={consent_sensitive}", "None")
         
         flash(f"Consent preferences updated for Session '{session_id}'. Next handover will immediately reflect changes.", "success")
@@ -222,6 +225,7 @@ def handover(session_id):
 @app.route('/baseline')
 @login_required
 def baseline():
+    t_start = time.time()
     all_sessions = get_all_sessions()
     selected_id = request.args.get('session_id', all_sessions[0]['session_id'] if all_sessions else None)
     
@@ -233,6 +237,8 @@ def baseline():
         summary_obj = generate_continuity_summary(dict(selected_session), user_role=user_role)
 
     comp_data = evaluate_baseline_vs_proposed()
+    t_end = time.time()
+    print(f"[TIMING] GET /baseline processed in {t_end - t_start:.4f} seconds")
 
     return render_template('baseline.html',
                            sessions=all_sessions,
@@ -243,8 +249,11 @@ def baseline():
 @app.route('/evaluation')
 @login_required
 def evaluation():
+    t_start = time.time()
     metrics = get_model_evaluation_metrics()
     comp_data = evaluate_baseline_vs_proposed()
+    t_end = time.time()
+    print(f"[TIMING] GET /evaluation processed in {t_end - t_start:.4f} seconds")
     return render_template('evaluation.html', metrics=metrics, comp_data=comp_data)
 
 @app.route('/user-guide')

@@ -17,6 +17,13 @@ from preprocess import load_and_preprocess_data
 from ml_model import train_and_evaluate_ml
 from database import get_all_sessions
 
+_EVALUATION_CACHE = None
+
+def clear_evaluation_cache():
+    """Clears cached evaluation result so next request recomputes updated stats."""
+    global _EVALUATION_CACHE
+    _EVALUATION_CACHE = None
+
 def get_model_evaluation_metrics():
     """Returns real test set metrics for both ML Relevance and DL Sensitivity models."""
     ml_metrics = train_and_evaluate_ml()
@@ -143,8 +150,12 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
     """
     Evaluates PROPOSED CONSENT-AWARE SYSTEM across session records.
     Applies ML relevance, DL sensitivity detection, Consent Engine, and RBAC rules.
+    Uses single-pass batch inference for ML and DL model execution.
     """
-    from summary_generator import generate_continuity_summary
+    from ml_model import predict_relevance_batch
+    from dl_model import predict_sensitivity_batch
+    from consent_engine import evaluate_consent
+    from access_control import check_role_access
     
     if sessions is None:
         sessions = get_all_sessions()
@@ -152,7 +163,17 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
             df, _ = load_and_preprocess_data()
             sessions = df.to_dict('records')
 
-    total_sessions = len(sessions)
+    session_dicts = [dict(s) for s in sessions]
+    total_sessions = len(session_dicts)
+
+    # 1. Prepare batch prediction text inputs
+    session_texts = [str(s.get('session_text', '') or '').strip() for s in session_dicts]
+    sensitive_texts = [str(s.get('sensitive_text', '') or '').strip() + " " + str(s.get('session_text', '') or '').strip() for s in session_dicts]
+
+    # 2. Run single-pass batch predictions across dataset
+    ml_results = predict_relevance_batch(session_texts)
+    dl_results = predict_sensitivity_batch(sensitive_texts)
+
     proposed_consent_violations = 0
     proposed_sensitive_exposures = 0
     sensitive_items_to_protect = 0
@@ -167,8 +188,7 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
     total_permitted_relevant_fields = 0
     retained_permitted_relevant_fields = 0
 
-    for s in sessions:
-        s_dict = dict(s)
+    for idx, s_dict in enumerate(session_dicts):
         is_relevant = int(s_dict.get('relevance_label', 1) if 'relevance_label' in s_dict else 1)
         is_sensitive = int(s_dict.get('sensitivity_label', 0) if 'sensitivity_label' in s_dict else 0)
         
@@ -187,18 +207,40 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
 
         has_sensitive_content = (is_sensitive == 1 or len(str(s_dict.get('sensitive_text', '')).strip()) > 0)
         
-        # In Social Worker role (or when consent=No), sensitive text SHOULD be protected
         if has_sensitive_content and (not consent_sensitive or default_role.lower() == "social worker"):
             sensitive_items_to_protect += 1
 
-        summary_obj = generate_continuity_summary(s_dict, user_role=default_role)
+        # Use batch predictions mapped to this session
+        ml_res = ml_results[idx]
+        dl_res = dl_results[idx]
 
-        summary_shown = summary_obj['summary_text'] not in ["🔒 Restricted by consent", "Session content classified as non-relevant for handover."]
-        goal_shown = summary_obj['client_goal'] != "🔒 Restricted by consent"
-        pending_shown = summary_obj['pending_action'] != "🔒 Restricted by consent"
-        sensitive_shown = summary_obj['sensitive_text'] not in ["🔒 Restricted by consent", "🔒 Restricted by role"]
+        consent_flags = {
+            'consent_summary': s_dict.get('consent_summary', 'No'),
+            'consent_goal': s_dict.get('consent_goal', 'No'),
+            'consent_pending_action': s_dict.get('consent_pending_action', 'No'),
+            'consent_sensitive': s_dict.get('consent_sensitive', 'No')
+        }
+        consent_eval = evaluate_consent(consent_flags)
 
-        # Consent violation check: did proposed system display text where consent was explicitly denied?
+        summary_access = check_role_access(default_role, 'summary', consent_eval['summary']['permitted'])
+        goal_access = check_role_access(default_role, 'goal', consent_eval['goal']['permitted'])
+        pending_access = check_role_access(default_role, 'pending_action', consent_eval['pending_action']['permitted'])
+        sensitive_access = check_role_access(default_role, 'sensitive', consent_eval['sensitive']['permitted'])
+
+        if summary_access['allowed']:
+            summary_text = s_dict.get('session_text', '') if ml_res['prediction'] == 1 else "Session content classified as non-relevant for handover."
+        else:
+            summary_text = summary_access['display_text']
+
+        goal_text = s_dict.get('client_goal', '') if goal_access['allowed'] else goal_access['display_text']
+        pending_text = s_dict.get('pending_action', '') if pending_access['allowed'] else pending_access['display_text']
+        sensitive_text = s_dict.get('sensitive_text', '') if sensitive_access['allowed'] else sensitive_access['display_text']
+
+        summary_shown = summary_text not in ["🔒 Restricted by consent", "Session content classified as non-relevant for handover."]
+        goal_shown = goal_text != "🔒 Restricted by consent"
+        pending_shown = pending_text != "🔒 Restricted by consent"
+        sensitive_shown = sensitive_text not in ["🔒 Restricted by consent", "🔒 Restricted by role"]
+
         if (summary_shown and not consent_summary) or \
            (goal_shown and not consent_goal) or \
            (pending_shown and not consent_pending) or \
@@ -214,7 +256,7 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
             else:
                 sensitive_items_protected += 1
 
-        if is_relevant == 1 and summary_obj['ml_relevance'] == "Relevant" and summary_obj['access_details']['summary']['allowed']:
+        if is_relevant == 1 and ml_res['prediction'] == 1 and summary_access['allowed']:
             proposed_relevant_retained_count += 1
 
         if is_relevant == 1:
@@ -222,10 +264,9 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
             if goal_shown and consent_goal: retained_permitted_relevant_fields += 1
             if pending_shown and consent_pending: retained_permitted_relevant_fields += 1
 
-        if is_relevant == 0 and summary_obj['summary_text'] not in ["Session content classified as non-relevant for handover.", "🔒 Restricted by consent", "🔒 Restricted by role"]:
+        if is_relevant == 0 and summary_text not in ["Session content classified as non-relevant for handover.", "🔒 Restricted by consent", "🔒 Restricted by role"]:
             proposed_unnecessary_exposure_count += 1
 
-    # Redaction Leakage Rate with zero-denominator safety
     if sensitive_items_to_protect > 0:
         redaction_leakage_rate = round((sensitive_items_incorrectly_exposed / sensitive_items_to_protect) * 100.0, 1)
     else:
@@ -252,11 +293,16 @@ def evaluate_proposed_system(sessions=None, default_role="Social Worker"):
         "unnecessary_exposure_pct": proposed_unnec_pct
     }
 
-def evaluate_baseline_vs_proposed():
+def evaluate_baseline_vs_proposed(force_refresh=False):
     """
     Combines Baseline evaluation and Proposed System evaluation for comparison views.
-    Separates baseline system logic completely from proposed system model logic.
+    Caches aggregate dataset evaluation metrics in memory for instant HTTP rendering.
     """
+    global _EVALUATION_CACHE
+
+    if _EVALUATION_CACHE is not None and not force_refresh:
+        return _EVALUATION_CACHE
+
     sessions = get_all_sessions()
     if not sessions:
         df, _ = load_and_preprocess_data()
@@ -265,10 +311,10 @@ def evaluate_baseline_vs_proposed():
     # 1. Baseline Evaluation (ZERO DL dependency)
     b_eval = evaluate_baseline_system(sessions)
     
-    # 2. Proposed System Evaluation
+    # 2. Proposed System Evaluation (Batch prediction pass)
     p_eval = evaluate_proposed_system(sessions, default_role="Social Worker")
 
-    return {
+    result = {
         "total_sessions_evaluated": b_eval["total_sessions"],
         "privacy_metrics": {
             "redaction_leakage_rate": {
@@ -353,8 +399,11 @@ def evaluate_baseline_vs_proposed():
         }
     }
 
+    _EVALUATION_CACHE = result
+    return result
+
 if __name__ == '__main__':
-    print("=== BASELINE VS PROPOSED COMPARISON WITH PRIVACY METRICS ===")
+    print("=== BASELINE VS PROPOSED COMPARISON WITH BATCH PREDICTION ===")
     comp = evaluate_baseline_vs_proposed()
     print(f"Evaluated {comp['total_sessions_evaluated']} session records:")
     for row in comp['metrics_table']:

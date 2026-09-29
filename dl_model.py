@@ -1,4 +1,5 @@
 import os
+import functools
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -17,10 +18,25 @@ MODELS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'models'))
 DL_MODEL_PATH = os.path.abspath(os.path.join(MODELS_DIR, 'sensitivity_model.keras'))
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-
 MAX_VOCAB_SIZE = 1000
 MAX_SEQUENCE_LENGTH = 50
 EMBEDDING_DIM = 32
+
+@functools.lru_cache(maxsize=1)
+def load_dl_model():
+    """
+    Loads and caches the Keras sensitivity model in memory.
+    Prevents rebuilding computation graph and reloading model from disk on every prediction call.
+    """
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    if not os.path.exists(DL_MODEL_PATH):
+        print(f"[INFO] Sensitivity model file '{DL_MODEL_PATH}' not found. Training Keras DL model...")
+        build_and_train_dl()
+
+    if not os.path.exists(DL_MODEL_PATH):
+        return None
+
+    return tf.keras.models.load_model(DL_MODEL_PATH)
 
 def build_and_train_dl():
     """
@@ -88,6 +104,9 @@ def build_and_train_dl():
     # 5. Save Keras Model
     model.save(DL_MODEL_PATH)
 
+    # Clear cached model in case of retraining
+    load_dl_model.cache_clear()
+
     metrics = {
         "accuracy": round(acc, 4),
         "precision": round(prec, 4),
@@ -102,45 +121,65 @@ def build_and_train_dl():
 
 def predict_sensitivity(text_content):
     """
-    Predicts sensitivity for a given text input using TensorFlow/Keras LSTM model.
-    Returns:
-        dict: {
-            "prediction": 1 (Sensitive) or 0 (Non-sensitive),
-            "label": "Sensitive" or "Non-sensitive",
-            "confidence": percentage (float e.g. 89.2),
-            "low_confidence_flag": True if confidence < 70.0
-        }
+    Predicts sensitivity for a single text input using cached TensorFlow/Keras LSTM model.
     """
-    os.makedirs(MODELS_DIR, exist_ok=True)
-    if not os.path.exists(DL_MODEL_PATH):
-        print(f"[INFO] Sensitivity model file '{DL_MODEL_PATH}' not found. Training Keras DL model...")
-        build_and_train_dl()
-
-    if not os.path.exists(DL_MODEL_PATH):
-        # Fallback if model saving encountered filesystem issues
-        lower_text = str(text_content).lower()
-        is_sens = any(k in lower_text for k in ['disclos', 'trauma', 'health', 'medical', 'private', 'confidential', 'distress'])
-        return {
-            "prediction": 1 if is_sens else 0,
-            "label": "Sensitive" if is_sens else "Non-sensitive",
-            "confidence": 85.0,
-            "low_confidence_flag": False
-        }
-
-    model = tf.keras.models.load_model(DL_MODEL_PATH)
-
-    input_text = tf.constant([str(text_content).lower().strip()], dtype=tf.string)
-    prob = float(model.predict(input_text, verbose=0)[0][0])
-    
-    pred = 1 if prob >= 0.5 else 0
-    conf_score = prob * 100.0 if pred == 1 else (1.0 - prob) * 100.0
-
-    return {
-        "prediction": pred,
-        "label": "Sensitive" if pred == 1 else "Non-sensitive",
-        "confidence": round(conf_score, 1),
-        "low_confidence_flag": bool(conf_score < 70.0)
+    res = predict_sensitivity_batch([text_content])
+    return res[0] if res else {
+        "prediction": 0,
+        "label": "Non-sensitive",
+        "confidence": 50.0,
+        "low_confidence_flag": True
     }
+
+def predict_sensitivity_batch(text_list):
+    """
+    Predicts sensitivity for a list of text inputs in a SINGLE batch pass.
+    Avoids Keras dataset allocation overhead for each individual item.
+    
+    Args:
+        text_list (list of str): List of text strings.
+        
+    Returns:
+        list of dict: List of sensitivity prediction result objects.
+    """
+    if not text_list:
+        return []
+
+    model = load_dl_model()
+
+    if model is None:
+        results = []
+        for text_content in text_list:
+            lower_text = str(text_content).lower()
+            is_sens = any(k in lower_text for k in ['disclos', 'trauma', 'health', 'medical', 'private', 'confidential', 'distress'])
+            results.append({
+                "prediction": 1 if is_sens else 0,
+                "label": "Sensitive" if is_sens else "Non-sensitive",
+                "confidence": 85.0,
+                "low_confidence_flag": False
+            })
+        return results
+
+    cleaned_texts = [str(t).lower().strip() for t in text_list]
+    input_tensor = tf.constant(cleaned_texts, dtype=tf.string)
+    
+    # Run batch inference directly on the Keras model tensor
+    probs = model(input_tensor, training=False).numpy().flatten()
+
+    results = []
+    for prob in probs:
+        p_val = float(prob)
+        pred = 1 if p_val >= 0.5 else 0
+        conf_score = p_val * 100.0 if pred == 1 else (1.0 - p_val) * 100.0
+
+        results.append({
+            "prediction": pred,
+            "label": "Sensitive" if pred == 1 else "Non-sensitive",
+            "confidence": round(conf_score, 1),
+            "low_confidence_flag": bool(conf_score < 70.0)
+        })
+
+    return results
 
 
 if __name__ == '__main__':
@@ -156,4 +195,3 @@ if __name__ == '__main__':
     print(f"\nSample Prediction Test:")
     print(f"  Input: '{sample_text}'")
     print(f"  Output: {res['label']} ({res['confidence']}% confidence)")
-
