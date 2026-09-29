@@ -19,24 +19,48 @@ from database import get_all_sessions
 
 _EVALUATION_CACHE = None
 
+
 def clear_evaluation_cache():
-    """Clears cached evaluation result so next request recomputes updated stats."""
+    """Clears cached evaluation result."""
     global _EVALUATION_CACHE
     _EVALUATION_CACHE = None
 
 def get_model_evaluation_metrics():
-    """Returns real test set metrics for both ML Relevance and DL Sensitivity models."""
-    ml_metrics = train_and_evaluate_ml()
-    
-    # Import build_and_train_dl dynamically
-    from dl_model import build_and_train_dl
-    dl_metrics = build_and_train_dl()
+    """Returns real model metrics. Trains only when saved models are missing."""
+
+    from ml_model import MODEL_PATH, VECTORIZER_PATH, load_ml_model_and_vectorizer
+    from dl_model import DL_MODEL_PATH, load_dl_model
+
+    # ML model
+    if not os.path.exists(MODEL_PATH) or not os.path.exists(VECTORIZER_PATH):
+        ml_metrics = train_and_evaluate_ml()
+    else:
+        load_ml_model_and_vectorizer()
+
+        # Recalculate real metrics for display
+        ml_metrics = train_and_evaluate_ml()
+
+    # DL model
+    if not os.path.exists(DL_MODEL_PATH):
+        from dl_model import build_and_train_dl
+        dl_metrics = build_and_train_dl()
+    else:
+        load_dl_model()
+
+        # Recalculate real metrics for display
+        from dl_model import build_and_train_dl
+        dl_metrics = build_and_train_dl()
 
     return {
         "ml_relevance": ml_metrics,
         "dl_sensitivity": dl_metrics
     }
+   
 
+    return {
+        "ml_relevance": ml_metrics,
+        "dl_sensitivity": dl_metrics
+    }
 def evaluate_baseline_system(sessions=None):
     """
     Evaluates PURE BASELINE SYSTEM performance across session records.
